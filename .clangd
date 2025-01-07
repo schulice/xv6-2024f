@@ -1,6 +1,18 @@
 If:
-  PathMatch: .*\.h
+    PathMatch: .*\.h
 CompileFlags:
-  Add: 
+    Add: 
     - "-I./kernel/type.h"
-  Diagnostics: None
+Diagnostics:
+    Suppress: ['*']
+
+---
+
+Index:
+    StandardLibrary: No
+CompileFlags:
+    Remove: -W*
+Diagnostics:
+    UnusedIncludes: Strict
+    MissingIncludes: None
+
