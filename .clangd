@@ -1,0 +1,6 @@
+If:
+  PathMatch: .*\.h
+CompileFlags:
+  Add: 
+    - "-I./kernel/type.h"
+  Diagnostics: None
