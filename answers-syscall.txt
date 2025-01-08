@@ -1,0 +1,25 @@
+1. Looking at the backtrace output, which function called syscall?
+
+usertrap() in user/trap.c
+
+2. What is the value of p->trapframe->a7 and what does that value represent? (Hint: look user/initcode.S, the first user program xv6 starts.) 
+
+0x7, the number of syscall id, when 0x7, it is exec syscall.
+
+3. What was the previous mode that the CPU was in?
+
+See the spp bit on sstatus, which announce the trap from user or supervisor
+
+
+4. Write down the assembly instruction the kernel is panicing at. Which register corresponds to the variable num?
+
+```assembly
+lw a3, 0(zero)
+a3 
+```
+
+
+5.`user/secret.c` copies the secret bytes to memory whose address is 32 bytes after the start of a page. Change the 32 to 0 and you should see that your attack doesn't work anymore; why not?
+
+`struct kmem` will use 32 bytes for hold the spinlock and next ptr, though it is 28 bytes actually, but pending may need to take 32 bytes.
+
