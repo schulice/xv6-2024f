@@ -489,8 +489,47 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 
 #ifdef LAB_PGTBL
 void
-vmprint(pagetable_t pagetable) {
+vmprint(pagetable_t pagetable)
+{
   // your code here
+  printf("page table %p\n", pagetable);
+  uint64 va = 0x0;
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 one = PTE2PA(pte);
+      printf("..%p: pte %p pa %p\n", (void*)va, (void*)pte, (void*)one);
+      for(int j = 0; j < 512; j++){
+        pte_t pte = ((pagetable_t)one)[j]; 
+        if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+          uint64 two = PTE2PA(pte);
+          printf(".. ..%p: pte %p pa %p\n", (void*)va, (void*)pte, (void*)two);
+          for(int k = 0; k < 512; k++){
+            pte_t pte = ((pagetable_t)two)[k];
+            if((pte & PTE_V) && PTE_LEAF(pte)){
+              uint64 three = PTE2PA(pte);
+              printf(".. .. ..%p: pte %p pa %p\n", (void*)va, (void*)pte, (void*)three);
+            }
+            va += 0x1 << 12;
+          }
+        } else if((pte & PTE_V) && PTE_LEAF(pte)){
+          uint64 two = PTE2PA(pte);
+          printf(".. ..%p: pte %p pa %p\n", (void*)va, (void*)pte, (void*)two);
+          va += 0x1 << (12 + 9);
+        } else {
+          va += 0x1 << (12 + 9);
+        }
+      }
+    } else if((pte & PTE_V) && PTE_LEAF(pte)){
+      uint64 one = PTE2PA(pte);
+      printf("..%p: pte %p pa %p\n", (void*)va, (void*)pte, (void*)one);
+      va += 0x1 << (12 + 9 * 2);
+    } else {
+      va += 0x1 << (12 + 9 * 2);
+    }
+  }
 }
 #endif
 
