@@ -132,6 +132,12 @@ found:
     return 0;
   }
 
+  if ((p->alarmcom = (struct alarmcom*)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -139,6 +145,7 @@ found:
     release(&p->lock);
     return 0;
   }
+
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -158,6 +165,9 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  if(p->alarmcom)
+    kfree((void*)p->alarmcom);
+  p->alarmcom = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -693,3 +703,92 @@ procdump(void)
     printf("\n");
   }
 }
+
+void
+alarmsave(struct proc* p)
+{
+  struct alarmcom* ala = p->alarmcom;
+  struct trapframe* tf = p->trapframe;
+  ala->epc = tf->epc;
+
+  ala->ra = tf->ra;
+  ala->sp = tf->sp;
+
+  ala->t0 = tf->t0;
+  ala->t1 = tf->t1;
+  ala->t2 = tf->t2;
+
+  ala->s0 = tf->s0;
+  ala->s1 = tf->s1;
+
+  ala->a0 = tf->a0;
+  ala->a1 = tf->a1;
+
+  ala->a2 = tf->a2;
+  ala->a3 = tf->a3;
+  ala->a4 = tf->a4;
+  ala->a5 = tf->a5;
+  ala->a6 = tf->a6;
+  ala->a7 = tf->a7;
+
+  ala->s2 = tf->s2;
+  ala->s3 = tf->s3;
+  ala->s4 = tf->s4;
+  ala->s5 = tf->s5;
+  ala->s6 = tf->s6;
+  ala->s7 = tf->s7;
+  ala->s8 = tf->s8;
+  ala->s9 = tf->s9;
+  ala->s10 = tf->s10;
+  ala->s11 = tf->s11;
+
+  ala->t3 = tf->t3;
+  ala->t4 = tf->t4;
+  ala->t5 = tf->t5;
+  ala->t6 = tf->t6;
+}
+
+void
+alarmload(struct proc* p)
+{
+  struct trapframe* tf = p->trapframe;
+  struct alarmcom* ala = p->alarmcom;
+  tf->epc = ala->epc;
+
+  tf->ra = ala->ra;
+  tf->sp = ala->sp;
+
+  tf->t0 = ala->t0;
+  tf->t1 = ala->t1;
+  tf->t2 = ala->t2;
+
+  tf->s0 = ala->s0;
+  tf->s1 = ala->s1;
+
+  tf->a0 = ala->a0;
+  tf->a1 = ala->a1;
+
+  tf->a2 = ala->a2;
+  tf->a3 = ala->a3;
+  tf->a4 = ala->a4;
+  tf->a5 = ala->a5;
+  tf->a6 = ala->a6;
+  tf->a7 = ala->a7;
+
+  tf->s2 = ala->s2;
+  tf->s3 = ala->s3;
+  tf->s4 = ala->s4;
+  tf->s5 = ala->s5;
+  tf->s6 = ala->s6;
+  tf->s7 = ala->s7;
+  tf->s8 = ala->s8;
+  tf->s9 = ala->s9;
+  tf->s10 = ala->s10;
+  tf->s11 = ala->s11;
+
+  tf->t3 = ala->t3;
+  tf->t4 = ala->t4;
+  tf->t5 = ala->t5;
+  tf->t6 = ala->t6;
+}
+
