@@ -395,10 +395,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
       }
     }
     if((*pte & PTE_V) == 0 || (*pte & PTE_U) == 0 ||
-       (*pte & PTE_W) == 0){
-      printf("copyout invalid pte: %p\n", (void*)*pte);
+       (*pte & PTE_W) == 0)
       return -1;
-    }
     pa0 = PTE2PA(*pte);
     n = PGSIZE - (dstva - va0);
     if(n > len)

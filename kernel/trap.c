@@ -65,20 +65,20 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if (r_scause() == 0xf){
+  } else if (r_scause() == 0xf && r_stval() < MAXVA){
     // cow fork
     // printf("usertrap(): cow\n");
     pte_t* pte;
-    if((pte = walk(p->pagetable, r_stval(), 0)) < 0){
-      printf("cow: pte walk error\n");
-      setkilled(p);
+    if((pte = walk(p->pagetable, r_stval(), 0)) == 0){
+      goto undeftrap;
     }
     if(uvmcow(p->pagetable, pte) < 0){
-      setkilled(p);
+      goto undeftrap;
     }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+  undeftrap:
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
     setkilled(p);
