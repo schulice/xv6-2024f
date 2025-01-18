@@ -65,6 +65,17 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (r_scause() == 0xf){
+    // cow fork
+    // printf("usertrap(): cow\n");
+    pte_t* pte;
+    if((pte = walk(p->pagetable, r_stval(), 0)) < 0){
+      printf("cow: pte walk error\n");
+      setkilled(p);
+    }
+    if(uvmcow(p->pagetable, pte) < 0){
+      setkilled(p);
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
