@@ -101,8 +101,26 @@ e1000_transmit(char *buf, int len)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after send completes.
   //
-
-  
+  char* prev;
+  if((uint64)buf - PGROUNDDOWN((uint64)buf) + len > PGSIZE) {
+    printf("e1000: transmitter a larger pgsz packet\n");
+  }
+  acquire(&e1000_lock);
+  int back = regs[E1000_TDT];
+  if((tx_ring[back].status & E1000_TXD_STAT_DD) == 0){
+    release(&e1000_lock);
+    return -1;
+  }
+  prev = tx_bufs[back];
+  tx_bufs[back] = buf;
+  tx_ring[back].addr = (uint64)buf;
+  tx_ring[back].length = len;
+  tx_ring[back].cmd |= E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;
+  regs[E1000_TDT] = (back + 1) % TX_RING_SIZE;
+  release(&e1000_lock);
+  if(prev){
+    kfree(prev);
+  }
   return 0;
 }
 
@@ -115,7 +133,28 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver a buf for each packet (using net_rx()).
   //
-
+  char* out;
+  uint16 len;
+  int back;
+  for(;;){
+    acquire(&e1000_lock);
+    back = (regs[E1000_RDT]+1) % RX_RING_SIZE;
+    if((rx_ring[back].status & E1000_TXD_STAT_DD) == 0){
+      release(&e1000_lock);
+      break;
+    }
+    out = rx_bufs[back];
+    len = rx_ring[back].length;
+    rx_bufs[back] = kalloc();
+    if(rx_bufs[back] < 0){
+      panic("e1000");
+    }
+    memset(&rx_ring[back], 0, sizeof(rx_ring[back]));
+    rx_ring[back].addr = (uint64)rx_bufs[back];
+    regs[E1000_RDT] = back;
+    release(&e1000_lock);
+    net_rx(out, len);
+  }
 }
 
 void

@@ -19,10 +19,61 @@ static uint8 host_mac[ETHADDR_LEN] = { 0x52, 0x55, 0x0a, 0x00, 0x02, 0x02 };
 
 static struct spinlock netlock;
 
+struct wqnode {
+  int buflen[16];
+  char* addr[16];
+  int port;
+  int head;
+  int tail;
+};
+static struct wqnode rxwq[16];
+
+int
+findqi(int port)
+{
+  for(int i = 0; i < 16; i++){
+    if(rxwq[i].port == port){
+      return i;
+    }
+  }
+  return -1;
+}
+
+int
+poppackge(int idx, char **out, int *len)
+{
+  int tail = rxwq[idx].tail;
+  if(rxwq[idx].addr[tail] == 0){
+    return -1;
+  }
+  *out = rxwq[idx].addr[tail];
+  *len = rxwq[idx].buflen[tail];
+  rxwq[idx].buflen[tail] = 0;
+  rxwq[idx].addr[tail] = 0;
+  rxwq[idx].tail = (tail + 1) % 16;
+  return 0;
+}
+
+int
+pushpackage(int idx, char *in, int len)
+{
+  int front = rxwq[idx].head;
+  if(rxwq[idx].addr[front] != 0){
+    return -1;
+  }
+  rxwq[idx].addr[front] = in;
+  rxwq[idx].buflen[front] = len;
+  rxwq[idx].head = (front + 1) % 16;
+  return 0;
+}
+
 void
 netinit(void)
 {
   initlock(&netlock, "netlock");
+  // if((rxwq = (struct wqnode*)kalloc()) < 0){
+  //   panic("netinit: fail alloc waitqueue");
+  // }
 }
 
 
@@ -37,8 +88,19 @@ sys_bind(void)
   //
   // Your code here.
   //
+  int port;
+  argint(0, &port);
 
-  return -1;
+  int i;
+  acquire(&netlock);
+  if((i = findqi(0)) < 0){
+    release(&netlock);
+    return -1;
+  }
+  rxwq[i].port = port;
+  release(&netlock);
+  // printf("sys_bind: port:%d idx:%d\n", port, i);
+  return 0;
 }
 
 //
@@ -53,6 +115,17 @@ sys_unbind(void)
   // Optional: Your code here.
   //
 
+  int port;
+  argint(0, &port);
+
+  int i;
+  acquire(&netlock);
+  if((i = findqi(port)) < 0){
+    release(&netlock);
+    return -1;
+  }
+  memset(rxwq+i, 0, sizeof(rxwq[i]));
+  release(&netlock);
   return 0;
 }
 
@@ -77,7 +150,52 @@ sys_recv(void)
   //
   // Your code here.
   //
-  return -1;
+  int dport;
+  uint64 src;   // int*
+  uint64 sport; // short*
+  uint64 buf;   // char*
+  int maxlen;
+
+  argint(0, &dport);
+  argaddr(1, &src);
+  argaddr(2, &sport);
+  argaddr(3, &buf);
+  argint(4, &maxlen);
+
+  int idx;
+  char *out;
+  int len;
+  acquire(&netlock);
+  idx = findqi(dport);
+  if(idx < 0){
+    release(&netlock);
+    return -1;
+  }
+  // printf("sys_recv: port:%d idx:%d\n", dport, idx);
+  while (poppackge(idx, &out, &len) < 0) {
+    if(killed(myproc())){
+      release(&netlock);
+      return -1;
+    }
+    sleep(&rxwq[idx], &netlock);
+  }
+  release(&netlock);
+
+  struct eth *eth = (struct eth*)out;
+  struct ip *ip = (struct ip*)(eth + 1);
+  struct udp *udp = (struct udp*)(ip + 1);
+  char* payload = (char*)(udp + 1);
+  int pylen = ntohs(udp->ulen) - sizeof(struct udp);
+  // printf("sys_recv: port:%d pylen:%d py:%s\n", dport, pylen, payload);
+  if(pylen > maxlen)
+    pylen = maxlen;
+  uint32 nsrc = ntohl(ip->ip_src);
+  short nsport = ntohs(udp->sport);
+  copyout(myproc()->pagetable, src, (char*)&nsrc, sizeof(uint32));
+  copyout(myproc()->pagetable, sport, (char*)&nsport, sizeof(short));
+  copyout(myproc()->pagetable, buf, payload, pylen);
+  kfree(out);
+  return pylen;
 }
 
 // This code is lifted from FreeBSD's ping.c, and is copyright by the Regents
@@ -191,7 +309,26 @@ ip_rx(char *buf, int len)
   //
   // Your code here.
   //
-  
+  struct eth *eth = (struct eth*)buf;
+  struct ip *ip = (struct ip*)(eth + 1);
+  struct udp *udp = (struct udp*)(ip + 1);
+  int port = ntohs(udp->dport);
+  int idx;
+  acquire(&netlock);
+  if((idx = findqi(port)) < 0){
+    // printf("ip_rx: can not find %d\n", port);
+    release(&netlock);
+    kfree(buf);
+    return;
+  }
+  if(pushpackage(idx, buf, len) < 0){
+    release(&netlock);
+    kfree(buf);
+    return;
+  }
+  // printf("ip_rx: port:%d idx:%d addr:%p len:%d\n", port, idx, buf, len);
+  wakeup(&rxwq[idx]);
+  release(&netlock);
 }
 
 //
