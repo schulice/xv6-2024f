@@ -11,7 +11,7 @@ Diagnostics:
 Index:
     StandardLibrary: No
 CompileFlags:
-    Add: ["-DLAB_PGTBL=1"]
+    Add: ["-DLAB_FS=1"]
     Remove: -W*
 Diagnostics:
     UnusedIncludes: Strict
