@@ -738,6 +738,66 @@ namex(char *path, int nameiparent, char *name)
   return ip;
 }
 
+
+// Get the realpath from sympath, will modify sympath
+//
+// Return -1 if meet limit of depth
+int
+realpaths(char *sympath, uint depth)
+{
+  struct inode *ip, *next;
+  char *ps = sympath;
+  char buf[MAXPATH];
+
+  if(*sympath == '/')
+    ip = iget(ROOTDEV, ROOTINO);
+  else
+    ip = idup(myproc()->cwd);
+
+  while((sympath = skipelem(sympath, buf)) != 0){
+    ilock(ip);
+    if(ip->type != T_DIR){
+      iunlockput(ip);
+      return 0;
+    }
+    if((next = dirlookup(ip, buf, 0)) == 0){
+      iunlockput(ip);
+      return 0;
+    }
+    iunlockput(ip);
+
+    ilock(next);
+    if(next->type == T_SYMLINK){
+      if(!depth){
+        iunlockput(next);
+        return -1;
+      }
+      depth -= 1;
+      memset(buf, 0, MAXPATH);
+      readi(next, 0, (uint64)buf, 0, MAXPATH);
+      iunlockput(next);
+      // modify sympath
+      int len = strlen(buf);
+      *(buf + len++) = '/';
+      int slen = strlen(sympath);
+      memmove(buf + len, sympath, slen);
+      len += slen;
+      if(*buf == '/'){
+        memset(ps, 0, MAXPATH);
+        memmove(ps, buf, len);
+        ip = iget(ROOTDEV, ROOTINO);
+      } else {
+        memmove(sympath, buf, len);
+      }
+      memset(buf, 0, MAXPATH);
+    } else {
+      iunlockput(next);
+      ip = next;
+    }
+  }
+  return 0;
+}
+
 struct inode*
 namei(char *path)
 {
