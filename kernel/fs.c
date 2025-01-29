@@ -756,6 +756,7 @@ realpaths(char *path, uint symdepth)
 
   while((path = skipelem(path, buf)) != 0){
     ilock(ip);
+    // LOCK: ip; REF: ip;
     if(ip->type != T_DIR){
       iunlockput(ip);
       return 0;
@@ -767,6 +768,7 @@ realpaths(char *path, uint symdepth)
     iunlock(ip);
 
     ilock(next);
+    // LOCK: next; REF: ip, next;
     if(next->type == T_SYMLINK){
       if(!symdepth){
         iunlockput(next);
@@ -777,7 +779,8 @@ realpaths(char *path, uint symdepth)
       memset(buf, 0, MAXPATH);
       readi(next, 0, (uint64)buf, 0, MAXPATH);
       iunlockput(next);
-      printf("BUF: symlink %s\n", buf);
+      // LOCK:; REF: ip;
+      // printf("BUF: symlink %s\n", buf);
       int len = strlen(buf);
       if(*path != '\0'){
         *(buf+len++) = '/';
@@ -798,9 +801,11 @@ realpaths(char *path, uint symdepth)
     } else {
       iunlock(next);
       iput(ip);
+      // LOCK:; REF: next
       ip = next;
     }
   }
+  iput(ip);
   return 0;
 }
 

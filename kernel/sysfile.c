@@ -316,13 +316,14 @@ sys_open(void)
 
   begin_op();
 
-  printf("OPEN: iput: %s\n", path);
+  // printf("OPEN: iput: %s\n", path);
   if(!(omode & O_NOFOLLOW)){
     if(realpaths(path, 10) < 0){
+      end_op();
       return -1;
     }
   }
-  printf("OPEN: syml: %s\n", path);
+  // printf("OPEN: syml: %s\n", path);
   // if((ip = namei(path)) != 0){
   //   iput(ip);
   // }
