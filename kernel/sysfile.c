@@ -316,13 +316,16 @@ sys_open(void)
 
   begin_op();
 
-  printf("before: %s\n", path);
+  printf("OPEN: iput: %s\n", path);
   if(!(omode & O_NOFOLLOW)){
     if(realpaths(path, 10) < 0){
       return -1;
     }
   }
-  printf("after: %s\n", path);
+  printf("OPEN: syml: %s\n", path);
+  // if((ip = namei(path)) != 0){
+  //   iput(ip);
+  // }
 
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
@@ -527,8 +530,8 @@ sys_symlink()
     end_op();
     return -1;
   }
-  writei(ip, 0, (uint64)path, 0, sizeof(path));
-  iunlock(ip);
+  writei(ip, 0, (uint64)target, 0, strlen(target));
+  iunlockput(ip);
   end_op();
   return 0;
 }

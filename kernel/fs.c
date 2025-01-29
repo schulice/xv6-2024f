@@ -743,18 +743,18 @@ namex(char *path, int nameiparent, char *name)
 //
 // Return -1 if meet limit of depth
 int
-realpaths(char *sympath, uint depth)
+realpaths(char *path, uint symdepth)
 {
   struct inode *ip, *next;
-  char *ps = sympath;
+  char *pbegin = path;
   char buf[MAXPATH];
 
-  if(*sympath == '/')
+  if(*path == '/')
     ip = iget(ROOTDEV, ROOTINO);
   else
     ip = idup(myproc()->cwd);
 
-  while((sympath = skipelem(sympath, buf)) != 0){
+  while((path = skipelem(path, buf)) != 0){
     ilock(ip);
     if(ip->type != T_DIR){
       iunlockput(ip);
@@ -764,34 +764,40 @@ realpaths(char *sympath, uint depth)
       iunlockput(ip);
       return 0;
     }
-    iunlockput(ip);
+    iunlock(ip);
 
     ilock(next);
     if(next->type == T_SYMLINK){
-      if(!depth){
+      if(!symdepth){
         iunlockput(next);
+        iput(ip);
         return -1;
       }
-      depth -= 1;
+      symdepth -= 1;
       memset(buf, 0, MAXPATH);
       readi(next, 0, (uint64)buf, 0, MAXPATH);
       iunlockput(next);
-      // modify sympath
+      printf("BUF: symlink %s\n", buf);
       int len = strlen(buf);
-      *(buf + len++) = '/';
-      int slen = strlen(sympath);
-      memmove(buf + len, sympath, slen);
-      len += slen;
-      if(*buf == '/'){
-        memset(ps, 0, MAXPATH);
-        memmove(ps, buf, len);
-        ip = iget(ROOTDEV, ROOTINO);
-      } else {
-        memmove(sympath, buf, len);
+      if(*path != '\0'){
+        *(buf+len++) = '/';
+        int lastlen = strlen(path);
+        memmove(buf + len, path, lastlen);
+        len += lastlen;
       }
-      memset(buf, 0, MAXPATH);
+      if(*buf == '/'){
+        iput(ip);
+        ip = iget(ROOTDEV, ROOTINO);
+        memset(pbegin, 0, MAXPATH);
+        memmove(pbegin, buf, len);
+        path = pbegin;
+      } else {
+        // still hold ip ref
+        memmove(path, buf, len);
+      }
     } else {
-      iunlockput(next);
+      iunlock(next);
+      iput(ip);
       ip = next;
     }
   }
