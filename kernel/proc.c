@@ -55,6 +55,7 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
+      p->vmastack = VMASTART;
   }
 }
 
@@ -162,6 +163,7 @@ freeproc(struct proc *p)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
   p->sz = 0;
+  p->vmastack = 0;
   p->pid = 0;
   p->parent = 0;
   p->name[0] = 0;
@@ -692,4 +694,45 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// Hold p->lock
+//
+// Return 0 if not enough vma
+struct vma*
+allocvma(struct proc *p, uint64 len)
+{
+  int i;
+
+  for(i = 0; i < 16; i++){
+    if(p->vma[i].start == 0){
+      break;
+    }
+  }
+  if(i == 16){
+    return 0;
+  }
+  p->vmastack -= PGROUNDUP(len);
+  p->vma[i].start = p->vmastack;
+  p->vma[i].len = len;
+  return &p->vma[i];
+}
+
+// Hold p->lock
+void
+deallocvma(struct proc *p, struct vma *vma)
+{
+  if(vma->start == p->vmastack){
+    vma->start = 0;
+    p->vmastack = VMASTART;
+    for(int i = 0; i < 16; i++){
+      if(p->vma[i].start != 0 && p->vmastack > p->vma[i].start) {
+        p->vmastack = p->vma[i].start;
+      }
+    }
+  }
+  vma->f = 0;
+  vma->start = 0;
+  vma->len = 0;
+  vma->perm = 0;
 }
