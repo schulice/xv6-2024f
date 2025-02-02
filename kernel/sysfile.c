@@ -546,11 +546,11 @@ sys_munmap(void)
 
   struct proc *p = myproc();
   int i;
-  for(i = 0; i < 16; i++){
+  for(i = 0; i < NVMA; i++){
     if(p->vma[i].start <= addr && p->vma[i].start + p->vma[i].len > addr)
       break;
   }
-  if(i == 16)
+  if(i == NVMA)
     return -1;
   struct vma *vma = &p->vma[i];
   if(len > vma->len)
@@ -572,11 +572,11 @@ sys_munmap(void)
     return 0;
   }
   int ni;
-  for(ni = 0; ni < 16; ni++){
+  for(ni = 0; ni < NVMA; ni++){
     if(p->vma[i].start == 0)
       break;
   }
-  if(ni == 16)
+  if(ni == NVMA)
     return -1;
   struct vma *nvma = &p->vma[ni];
   nvma->f = filedup(vma->f);

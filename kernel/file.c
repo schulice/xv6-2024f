@@ -189,8 +189,10 @@ filereadpage(struct file *f, uint64 dst, uint64 off)
   begin_op();
   ilock(f->ip);
   readi(f->ip, 0, dst, off, PGSIZE);
-  if(off + PGSIZE > f->ip->size)
-    memset((void*)(dst + off + PGSIZE - f->ip->size), 0, off + PGSIZE - f->ip->size);
+  if(off + PGSIZE > f->ip->size){
+    uint64 least = off + PGSIZE - f->ip->size;
+    memset((void*)(dst + (f->ip->size - off)), 0, least);
+  }
   iunlock(f->ip);
   end_op();
   return 0;

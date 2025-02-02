@@ -71,14 +71,14 @@ usertrap(void)
     uint64 va = r_stval();
     struct proc *p = myproc();
     // va == MAXVA is out here
-    for(i = 0; i < 16; i++) {
+    for(i = 0; i < NVMA; i++) {
       if(p->vma[i].start && 
         p->vma[i].start <= va &&
         p->vma[i].start + p->vma[i].len > va){
         break;
       }
     }
-    if(i == 16){
+    if(i == NVMA){
       printf("mmap: not found vma\n");
       goto TRAPUNKOWN;
     }

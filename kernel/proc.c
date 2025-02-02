@@ -142,6 +142,13 @@ found:
     release(&p->lock);
     return 0;
   }
+  
+  if((p->vma = (struct vma*)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  memset(p->vma, 0, PGSIZE);
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -164,6 +171,8 @@ freeproc(struct proc *p)
   p->vmastack = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->vma)
+    kfree((void*)p->vma);
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -364,7 +373,7 @@ exit(int status)
   if(p == initproc)
     panic("init exiting");
 
-  for(int i = 0; i < 16; i++){
+  for(int i = 0; i < NVMA; i++){
     if(p->vma[i].start)
       freevma(p, &p->vma[i]);
   }
@@ -720,12 +729,12 @@ allocvma(struct proc *p, uint64 len)
 {
   int i;
 
-  for(i = 0; i < 16; i++){
+  for(i = 0; i < NVMA; i++){
     if(p->vma[i].start == 0){
       break;
     }
   }
-  if(i == 16){
+  if(i == NVMA){
     return 0;
   }
   struct vma *vma = &p->vma[i];
@@ -743,7 +752,7 @@ deallocvma(struct proc *p, struct vma *vma)
   if(vma->start == p->vmastack){
     vma->start = 0;
     p->vmastack = VMASTART;
-    for(int i = 0; i < 16; i++){
+    for(int i = 0; i < NVMA; i++){
       if(p->vma[i].start != 0 && p->vmastack > p->vma[i].start) {
         p->vmastack = p->vma[i].start;
       }
