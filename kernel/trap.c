@@ -79,7 +79,7 @@ usertrap(void)
       }
     }
     if(i == NVMA){
-      printf("mmap: not found vma\n");
+      // printf("mmap: not found vma\n");
       goto TRAPUNKOWN;
     }
     switch(r_scause()){
@@ -99,7 +99,7 @@ usertrap(void)
       panic("mmap: walk alloc error");
     }
     if(*pte & PTE_V){
-      printf("mmap: remap page\n");
+      // printf("mmap: remap page\n");
       goto TRAPUNKOWN;
     }
     uint64 pa = (uint64)kalloc();
@@ -116,7 +116,7 @@ usertrap(void)
     if(p->vma[i].prot & PROT_READ)
       perm |= PTE_R;
     *pte = PA2PTE(pa) | perm;
-    printf("mmap: load page at va %p offset %ld\n", (void*)va, off);
+    // printf("mmap: load page at va %p offset %ld\n", (void*)va, off);
     // printf("mmap: page content: %s\n", (char*)pa);
   } else if((which_dev = devintr()) != 0){
     // ok

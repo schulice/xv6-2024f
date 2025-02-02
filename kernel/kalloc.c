@@ -55,8 +55,8 @@ kfree(void *pa)
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
-  if(r == 0)
-    printf("kfree: meet 0x0 addr\n");
+  // if(r == 0)
+  //   printf("kfree: meet 0x0 addr\n");
 
   acquire(&kmem.lock);
   r->next = kmem.freelist;
@@ -74,12 +74,10 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r && ((char*)r)[8] != 1)
-    printf("kalloc: freelist is modified\n");
+  // if(r && ((char*)r)[8] != 1)
+  //   printf("kalloc: freelist is modified\n");
   if(r)
     kmem.freelist = r->next;
-  else
-    printf("kalloc: meet 0x0 addr\n");
   release(&kmem.lock);
 
   if(r)

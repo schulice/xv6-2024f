@@ -805,7 +805,7 @@ uvmmmapunmap(pagetable_t pagetable, uint64 va, uint64 npages, int writeback, str
   if((va % PGSIZE) != 0)
     panic("uvmunmap: not aligned");
 
-  printf("mmap: uvmunmap %p -> %p\n", (void*)va, (void*)(va + npages * PGSIZE));
+  // printf("mmap: uvmunmap %p -> %p\n", (void*)va, (void*)(va + npages * PGSIZE));
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
@@ -814,7 +814,7 @@ uvmmmapunmap(pagetable_t pagetable, uint64 va, uint64 npages, int writeback, str
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     uint64 pa = PTE2PA(*pte);
-    printf("mmap: unmap va %p with pa %p\n", (void*)a, (void*)pa);
+    // printf("mmap: unmap va %p with pa %p\n", (void*)a, (void*)pa);
     if(writeback)
       filewritepage(f, pa, a - va + fileoff);
     kfree((void*)pa);

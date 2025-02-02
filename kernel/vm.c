@@ -93,10 +93,8 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
     if(*pte & PTE_V) {
       pagetable = (pagetable_t)PTE2PA(*pte);
     } else {
-      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0){
-        printf("walk: alloc error\n");
+      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
         return 0;
-      }
       memset(pagetable, 0, PGSIZE);
       *pte = PA2PTE(pagetable) | PTE_V;
     }
