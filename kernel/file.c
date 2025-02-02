@@ -180,3 +180,32 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
+// fill one page
+//
+// Return -1 if file type error
+int
+filereadpage(struct file *f, uint64 dst, uint64 off)
+{
+  begin_op();
+  ilock(f->ip);
+  readi(f->ip, 0, dst, off, PGSIZE);
+  if(off + PGSIZE > f->ip->size)
+    memset((void*)(dst + off + PGSIZE - f->ip->size), 0, off + PGSIZE - f->ip->size);
+  iunlock(f->ip);
+  end_op();
+  return 0;
+}
+
+#define min(a, b) ((a) < (b) ? (a) : (b))
+
+int
+filewritepage(struct file *f, uint64 src, uint64 off)
+{
+  begin_op();
+  ilock(f->ip);
+  writei(f->ip, 0, src, off, min(f->ip->size - off, PGSIZE));
+  iunlock(f->ip);
+  end_op();
+  return 0;
+}
+

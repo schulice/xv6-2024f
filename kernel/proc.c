@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -125,6 +126,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->vmastack = VMASTART;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -159,11 +161,11 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  p->vmastack = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
   p->sz = 0;
-  p->vmastack = 0;
   p->pid = 0;
   p->parent = 0;
   p->name[0] = 0;
@@ -290,10 +292,18 @@ fork(void)
     return -1;
   }
 
+  for(int i = 0; i < 16; i++){
+    np->vma[i] = p->vma[i];
+    if(p->vma[i].start){
+      filedup(p->vma[i].f);
+    }
+  }
+
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
+    printf("fork: fail on uvmcopy\n");
     return -1;
   }
   np->sz = p->sz;
@@ -308,6 +318,7 @@ fork(void)
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
+
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
@@ -352,6 +363,11 @@ exit(int status)
 
   if(p == initproc)
     panic("init exiting");
+
+  for(int i = 0; i < 16; i++){
+    if(p->vma[i].start)
+      freevma(p, &p->vma[i]);
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
@@ -712,10 +728,12 @@ allocvma(struct proc *p, uint64 len)
   if(i == 16){
     return 0;
   }
+  struct vma *vma = &p->vma[i];
   p->vmastack -= PGROUNDUP(len);
-  p->vma[i].start = p->vmastack;
-  p->vma[i].len = len;
-  return &p->vma[i];
+  vma->start = p->vmastack;
+  vma->len = len;
+  vma->off = 0;
+  return vma;
 }
 
 // Hold p->lock
@@ -734,5 +752,71 @@ deallocvma(struct proc *p, struct vma *vma)
   vma->f = 0;
   vma->start = 0;
   vma->len = 0;
-  vma->perm = 0;
+  vma->off = 0;
+  vma->prot = 0;
+  vma->flags = 0;
+}
+
+int
+mapfillzero(pagetable_t pagetable, uint64 va, uint64 size, int perm)
+{
+  uint64 a, last;
+  pte_t *pte;
+
+  if((va % PGSIZE) != 0)
+    panic("mappages: va not aligned");
+
+  if((size % PGSIZE) != 0)
+    panic("mappages: size not aligned");
+
+  if(size == 0)
+    panic("mappages: size");
+  
+  a = va;
+  last = va + size - PGSIZE;
+  for(;;){
+    if((pte = walk(pagetable, a, 1)) == 0)
+      return -1;
+    if(*pte & PTE_V)
+      panic("mappages: remap");
+    *pte = PA2PTE(0) | perm | PTE_V;
+    if(a == last)
+      break;
+    a += PGSIZE;
+  }
+  return 0;
+}
+
+void
+uvmmmapunmap(pagetable_t pagetable, uint64 va, uint64 npages, int writeback, struct file *f, uint64 fileoff)
+{
+  uint64 a;
+  pte_t *pte;
+
+  if((va % PGSIZE) != 0)
+    panic("uvmunmap: not aligned");
+
+  printf("mmap: uvmunmap %p -> %p\n", (void*)va, (void*)(va + npages * PGSIZE));
+  for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+    if((pte = walk(pagetable, a, 0)) == 0)
+      panic("uvmunmap: walk");
+    if((*pte & PTE_V) == 0)
+      continue;
+    if(PTE_FLAGS(*pte) == PTE_V)
+      panic("uvmunmap: not a leaf");
+    uint64 pa = PTE2PA(*pte);
+    printf("mmap: unmap va %p with pa %p\n", (void*)a, (void*)pa);
+    if(writeback)
+      filewritepage(f, pa, a - va + fileoff);
+    kfree((void*)pa);
+    *pte = 0;
+  }
+}
+
+void
+freevma(struct proc *p, struct vma *vma)
+{
+  uvmmmapunmap(p->pagetable, vma->start, PGROUNDUP(vma->len) / PGSIZE, vma->flags & MAP_SHARED , vma->f, vma->off);
+  fileclose(vma->f);
+  deallocvma(p, vma);
 }

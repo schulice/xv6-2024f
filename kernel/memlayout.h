@@ -58,4 +58,4 @@
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
 
-#define VMASTART (TRAMPOLINE - (NPROC+1)* 2*PGSIZE)
+#define VMASTART (TRAMPOLINE - (NPROC+3)* 2*PGSIZE)

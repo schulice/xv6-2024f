@@ -518,9 +518,22 @@ sys_mmap(void)
   argint(5, &offset);
   if(argfd(4, &fd, &f) < 0)
     return -1;
-
-
-  return -1;
+  // if flags contain map_shared, just check the opened file prot
+  if(flags & MAP_SHARED){
+    if((prot & PROT_WRITE) && !f->writable)
+      return -1;
+    if((prot & PROT_READ) && !f->readable)
+      return -1;
+  }
+  struct proc *p = myproc();
+  struct vma *vma = allocvma(p, len);
+  if(!vma){
+    return -1;
+  }
+  vma->f = filedup(f);
+  vma->flags = flags;
+  vma->prot = prot;
+  return vma->start;
 }
 
 uint64
@@ -531,5 +544,48 @@ sys_munmap(void)
   argaddr(0, &addr);
   argint(1, &len);
 
-  return -1;
+  struct proc *p = myproc();
+  int i;
+  for(i = 0; i < 16; i++){
+    if(p->vma[i].start <= addr && p->vma[i].start + p->vma[i].len > addr)
+      break;
+  }
+  if(i == 16)
+    return -1;
+  struct vma *vma = &p->vma[i];
+  if(len > vma->len)
+    return -1;
+  if(addr == vma->start && len == vma->len){
+    freevma(p, vma);
+    return 0;
+  }
+  if(addr == vma->start){
+    uvmmmapunmap(p->pagetable, addr, len / PGSIZE, vma->flags & MAP_SHARED, vma->f, vma->off);
+    vma->len -= len;
+    vma->off += len;
+    vma->start += len;
+    return 0;
+  }
+  if(addr + len == vma->start + vma->len){
+    uvmmmapunmap(p->pagetable, PGROUNDUP(addr), len / PGSIZE, vma->flags & MAP_SHARED, vma->f, vma->off);
+    vma->len -= len;
+    return 0;
+  }
+  int ni;
+  for(ni = 0; ni < 16; ni++){
+    if(p->vma[i].start == 0)
+      break;
+  }
+  if(ni == 16)
+    return -1;
+  struct vma *nvma = &p->vma[ni];
+  nvma->f = filedup(vma->f);
+  nvma->start = addr + len;
+  nvma->len = vma->start + vma->len - (addr + len);
+  nvma->off = vma->off + (addr + len - vma->start);
+  nvma->flags = vma->flags;
+  nvma->prot = vma->prot;
+  uvmmmapunmap(p->pagetable, addr, len / PGSIZE, vma->flags & MAP_SHARED, vma->f, vma->off);
+  vma->len = addr - vma->start;
+  return 0;
 }

@@ -38,6 +38,9 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
+int             filereadpage(struct file *f, uint64 dst, uint64 off);
+int             filewritepage(struct file *f, uint64 src, uint64 off);
+void            filederef(struct file *f);
 
 // fs.c
 void            fsinit(int);
@@ -114,6 +117,9 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 struct vma*     allocvma(struct proc *p, uint64 len);
 void            deallocvma(struct proc *p, struct vma *vma);
+void            freevma(struct proc *p, struct vma *vma);
+int             mapfillzero(pagetable_t pagetable, uint64 va, uint64 size, int perm);
+void            uvmmmapunmap(pagetable_t pagetable, uint64 va, uint64 npages, int writeback, struct file *f, uint64 fileoff);
 
 // swtch.S
 void            swtch(struct context*, struct context*);

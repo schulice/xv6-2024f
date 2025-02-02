@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -65,9 +66,62 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 0xc || r_scause() == 0xd || r_scause() == 0xf) {
+    int i;
+    uint64 va = r_stval();
+    struct proc *p = myproc();
+    // va == MAXVA is out here
+    for(i = 0; i < 16; i++) {
+      if(p->vma[i].start && 
+        p->vma[i].start <= va &&
+        p->vma[i].start + p->vma[i].len > va){
+        break;
+      }
+    }
+    if(i == 16){
+      printf("mmap: not found vma\n");
+      goto TRAPUNKOWN;
+    }
+    switch(r_scause()){
+      case 0xc:
+        if(p->vma[i].prot & PROT_EXEC)
+          break;
+      case 0xd:
+        if(p->vma[i].prot & PROT_WRITE)
+          break;
+      case 0xf:
+        if(p->vma[i].prot & PROT_READ)
+          break;
+        goto TRAPUNKOWN;
+    }
+    pte_t *pte;
+    if((pte = walk(p->pagetable, PGROUNDDOWN(va), 1)) == 0){
+      panic("mmap: walk alloc error");
+    }
+    if(*pte & PTE_V){
+      printf("mmap: remap page\n");
+      goto TRAPUNKOWN;
+    }
+    uint64 pa = (uint64)kalloc();
+    if(!pa)
+      panic("mmap: alloc error\n");
+    uint64 off = PGROUNDDOWN(va) - p->vma[i].start;
+    if(filereadpage(p->vma[i].f, pa, p->vma[i].off + off) < 0)
+      panic("mmap: read file page error\n");
+    int perm = PTE_U | PTE_V;
+    if(p->vma[i].prot & PROT_EXEC)
+      perm |= PTE_X;
+    if(p->vma[i].prot & PROT_WRITE)
+      perm |= PTE_W;
+    if(p->vma[i].prot & PROT_READ)
+      perm |= PTE_R;
+    *pte = PA2PTE(pa) | perm;
+    printf("mmap: load page at va %p offset %ld\n", (void*)va, off);
+    // printf("mmap: page content: %s\n", (char*)pa);
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+  TRAPUNKOWN:
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
     setkilled(p);
