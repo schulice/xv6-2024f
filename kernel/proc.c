@@ -124,6 +124,8 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->stride = 0;
+  p->prio = U64_MAX;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -169,6 +171,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->stride= 0;
+  p->prio = U64_MAX;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -434,6 +438,17 @@ wait(uint64 addr)
   }
 }
 
+#define abs_diff(a, b) (a < b ? (b-a) : (a-b))
+
+int
+less(uint64 stridea, uint64 strideb)
+{
+  int res = stridea < strideb;
+  if(abs_diff(stridea, strideb) > U64_MAX / 2)
+    res = !res;
+  return res;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -454,25 +469,36 @@ scheduler(void)
     // processes are waiting.
     intr_on();
 
-    int found = 0;
+    struct proc *schedp = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+        if(schedp == 0 ||
+          less(p->stride, schedp->stride)){
+          schedp = p;
+        }
       }
-      release(&p->lock);
     }
-    if(found == 0) {
+    for(p = proc; p < &proc[NPROC]; p++){
+      if(p != schedp)
+        release(&p->lock);
+    }
+    if(schedp){
+      // Switch to chosen process.  It is the process's job
+      // to release its lock and then reacquire it
+      // before jumping back to us.
+      schedp->state = RUNNING;
+      c->proc = schedp;
+      schedp->stride += U64_MAX / schedp->prio;
+      swtch(&c->context, &schedp->context);
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
+
+      release(&schedp->lock);
+
+    } else {
       // nothing to run; stop running on this core until an interrupt.
       intr_on();
       asm volatile("wfi");
