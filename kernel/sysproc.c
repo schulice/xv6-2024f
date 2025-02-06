@@ -95,8 +95,8 @@ sys_uptime(void)
 uint64
 sys_setprio(void)
 {
-  int prio;
-  argint(0, &prio);
+  uint64 prio;
+  argint(0, (int*)&prio);
   if (prio < 2)
     return -1;
   myproc()->prio = prio;

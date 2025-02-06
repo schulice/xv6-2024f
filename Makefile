@@ -226,6 +226,11 @@ UPROGS += \
 	$U/_cowtest
 endif
 
+ifeq ($(LAB), stride)
+UPROGS += \
+	$U/_stridetest
+endif
+
 ifeq ($(LAB),thread)
 UPROGS += \
 	$U/_uthread
@@ -296,6 +301,9 @@ ifndef CPUS
 CPUS := 3
 endif
 ifeq ($(LAB),fs)
+CPUS := 1
+endif
+ifeq ($(LAB),stride)
 CPUS := 1
 endif
 
