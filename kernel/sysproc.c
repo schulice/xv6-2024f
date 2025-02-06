@@ -91,3 +91,14 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_setprio(void)
+{
+  int prio;
+  argint(0, &prio);
+  if (prio < 2)
+    return -1;
+  myproc()->prio = prio;
+  return 0;
+}
